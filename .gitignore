@@ -15,3 +15,13 @@ src/config/serviceAccountKey.json
 
 # Miscellaneous
 .DS_Store
+
+storage.rules
+
+cors.json
+
+firebase.json
+
+.firebaserc
+
+public/uploads/
