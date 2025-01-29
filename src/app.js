@@ -74,6 +74,37 @@ app.post('/api/upload/profile', upload.single('photo'), (req, res) => {
   }
 });
 
+app.post('/api/profile', authMiddleware, async (req, res) => {
+  const { profile } = req.body;
+  const userId = req.user.uid;
+
+  try {
+    console.log('Received profile data:', profile);
+    const userRef = db.collection('users').doc(userId);
+    
+    const userData = {
+      photoURL: profile.photoURL,
+      budget: parseFloat(profile.budget),
+      location: profile.location,
+      housingType: profile.housingType,
+      description: profile.description,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await userRef.set(userData, { merge: true });
+    res.status(200).json({ 
+      success: true, 
+      message: 'Profile updated successfully' 
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 app.post('/api/listings', authMiddleware, async (req, res) => {
   const { formData } = req.body;
   const userId = req.user.uid;
