@@ -4,7 +4,10 @@ const path = require('path');
 const cors = require('cors');
 const authMiddleware = require('./middleware/auth');
 const admin = require('./config/firebase');
+const { getFirestore } = require('firebase-admin/firestore');
 const app = express();
+
+const db = getFirestore();
 
 // Middleware setup
 app.use(express.json());
@@ -68,6 +71,73 @@ app.post('/api/upload/profile', upload.single('photo'), (req, res) => {
       success: false, 
       error: error.message 
     });
+  }
+});
+
+app.post('/api/listings', authMiddleware, async (req, res) => {
+  const { formData } = req.body;
+  const userId = req.user.uid;
+
+  try {
+    console.log('Received form data:', formData);
+    const listingRef = db.collection('listings').doc();
+    const listingData = {
+      // Location
+      location: {
+        street: formData.street,
+        postalCode: formData.postalCode,
+        city: formData.city,
+        country: formData.country,
+      },
+      
+      // Housing
+      housing: {
+        totalRoommates: parseInt(formData.totalRoommates),
+        bathrooms: parseInt(formData.bathrooms),
+        privateArea: parseFloat(formData.privateArea),
+      },
+      
+      // Details
+      details: {
+        propertyType: formData.propertyType,
+        totalArea: parseFloat(formData.totalArea),
+        rooms: parseInt(formData.rooms),
+        floor: formData.floor ? parseInt(formData.floor) : null,
+        furnished: formData.furnished,
+        availableDate: formData.availableDate,
+        rent: parseFloat(formData.rent),
+        title: formData.title,
+        description: formData.description,
+      },
+      
+      // Photos
+      photos: formData.photos,
+      
+      // Services
+      services: formData.services,
+      
+      // Contact
+      contact: {
+        name: formData.contactName,
+        phone: formData.contactPhone,
+        email: formData.contactEmail,
+      },
+      
+      // Metadata
+      metadata: {
+        userId: userId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'active',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }
+    };
+
+    console.log('Listing data to be saved:', listingData);
+    await listingRef.set(listingData);
+    res.status(201).json({ success: true, message: 'Listing created successfully' });
+  } catch (error) {
+    console.error('Error creating listing:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
