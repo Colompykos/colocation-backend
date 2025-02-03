@@ -172,4 +172,15 @@ app.post('/api/listings', authMiddleware, async (req, res) => {
   }
 });
 
+app.get('/api/listings', async (req, res) => {
+  try {
+    const listingsSnapshot = await db.collection('listings').get();
+    const listings = listingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.status(200).json({ success: true, listings });
+  } catch (error) {
+    console.error('Error fetching listings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = app;
