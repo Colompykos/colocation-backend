@@ -110,7 +110,9 @@ app.post('/api/listings', authMiddleware, async (req, res) => {
   const userId = req.user.uid;
 
   try {
-    console.log('Received form data:', formData);
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.data() || {};
+    // console.log('Received form data:', formData);
     const listingRef = db.collection('listings').doc();
     const listingData = {
       // Location
@@ -157,10 +159,20 @@ app.post('/api/listings', authMiddleware, async (req, res) => {
       // Metadata
       metadata: {
         userId: userId,
+        userPhotoURL: userData?.photoURL || null, 
+        userName: userData.displayName || null,
+        userEmail: userData.email || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         status: 'active',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }
+      },
+
+      contact: {
+        name: formData.contactName || userData.displayName,
+        phone: formData.contactPhone,
+        email: formData.contactEmail || userData.email,
+        photoURL: userData.photoURL || null
+      },
     };
 
     console.log('Listing data to be saved:', listingData);
