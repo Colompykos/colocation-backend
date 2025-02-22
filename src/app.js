@@ -201,49 +201,243 @@ app.get("/api/listings", async (req, res) => {
   }
 });
 
-app.post("/api/favorites/toggle", authMiddleware, async (req, res) => {
-  const { listingId } = req.body;
-  const userId = req.user.uid;
-
+app.get("/api/admin/users", authMiddleware, async (req, res) => {
   try {
-    const favoriteRef = db.collection('favorites').doc(`${userId}_${listingId}`);
-    const favoriteDoc = await favoriteRef.get();
-
-    if (favoriteDoc.exists) {
-      // Retirer des favoris
-      await favoriteRef.delete();
-      res.json({ success: true, isFavorite: false });
-    } else {
-      // Ajouter aux favoris
-      await favoriteRef.set({
-        userId,
-        listingId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      res.json({ success: true, isFavorite: true });
+    if (!(await isAdmin(req.user.uid))) {
+      return res.status(403).json({ error: "Unauthorized" });
     }
+
+    const { users: authUsers } = await admin.auth().listUsers();
+
+    const usersSnapshot = await db.collection("users").get();
+    const firestoreUsers = {};
+    usersSnapshot.docs.forEach(doc => {
+      firestoreUsers[doc.id] = doc.data();
+    });
+
+    const users = await Promise.all(authUsers.map(async (authUser) => {
+      const firestoreData = firestoreUsers[authUser.uid] || {};
+      const providerData = authUser.providerData[0] || {};
+
+      if (!firestoreUsers[authUser.uid]) {
+        const userData = {
+          email: authUser.email || null,
+          displayName: authUser.displayName || null,
+          photoURL: authUser.photoURL || null,
+          status: "pending",
+          isVerified: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          provider: providerData.providerId || "password"
+        };
+
+        Object.keys(userData).forEach(key => 
+          userData[key] === undefined && delete userData[key]
+        );
+
+        await db.collection("users").doc(authUser.uid).set(userData);
+        firestoreData = userData;
+      }
+
+      const userData = {
+        id: authUser.uid,
+        email: authUser.email || null,
+        displayName: authUser.displayName || authUser.email || null,
+        photoURL: firestoreData.photoURL || authUser.photoURL || null,
+        emailVerified: authUser.emailVerified || false,
+        disabled: authUser.disabled || false,
+        lastSignInTime: authUser.metadata.lastSignInTime || null,
+        creationTime: authUser.metadata.creationTime || null,
+        provider: providerData.providerId || "password",
+        isAdmin: firestoreData.isAdmin || false,
+        isVerified: firestoreData.isVerified || false,
+        status: firestoreData.status || "pending",
+        studentCardURL: firestoreData.studentCardURL || null
+      };
+
+      Object.keys(userData).forEach(key => 
+        userData[key] === undefined && delete userData[key]
+      );
+
+      return userData;
+    }));
+
+    res.json({ 
+      success: true, 
+      users,
+      total: users.length,
+      stats: {
+        total: users.length,
+        active: users.filter(u => u.status === 'active').length,
+        pending: users.filter(u => u.status === 'pending').length,
+        blocked: users.filter(u => u.status === 'blocked').length,
+        providers: {
+          password: users.filter(u => u.provider === 'password').length,
+          google: users.filter(u => u.provider === 'google.com').length,
+          facebook: users.filter(u => u.provider === 'facebook.com').length
+        }
+      }
+    });
+
   } catch (error) {
-    console.error("Error toggling favorite:", error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Error fetching users:", error);
+    res.status(500).json({ error: error.message });
   }
 });
-
-app.get("/api/favorites/check/:listingId", authMiddleware, async (req, res) => {
-  const { listingId } = req.params;
-  const userId = req.user.uid;
+app.post("/api/admin/create", async (req, res) => {
+  const { email, password } = req.body;
 
   try {
-    const favoriteRef = db.collection('favorites').doc(`${userId}_${listingId}`);
-    const favoriteDoc = await favoriteRef.get();
+    const userRecord = await admin.auth().createUser({
+      email,
+      password,
+      emailVerified: true,
+    });
 
-    res.json({
+    await admin.auth().setCustomUserClaims(userRecord.uid, { admin: true });
+
+    await db.collection("users").doc(userRecord.uid).set({
+      email,
+      isAdmin: true,
+      isVerified: true,
+      status: "active",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.status(201).json({
       success: true,
-      isFavorite: favoriteDoc.exists
+      message: "Admin account created successfully",
+      uid: userRecord.uid,
     });
   } catch (error) {
-    console.error("Error checking favorite:", error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Error creating admin:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 });
+
+app.delete("/api/admin/users/:userId/auth", authMiddleware, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.uid))) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const { userId } = req.params;
+
+    try {
+      await admin.auth().deleteUser(userId);
+      res.json({ 
+        success: true, 
+        message: "Compte utilisateur supprimé avec succès" 
+      });
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        return res.json({ 
+          success: true, 
+          message: "Compte utilisateur déjà supprimé" 
+        });
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error("Error deleting user auth:", error);
+    res.status(500).json({ 
+      error: error.message || "Erreur lors de la suppression" 
+    });
+  }
+});
+
+const isAdmin = async (userId) => {
+  const userDoc = await db.collection("users").doc(userId).get();
+  return userDoc.exists && userDoc.data().isAdmin === true;
+};
+
+app.get("/api/auth/check-status", authMiddleware, async (req, res) => {
+  try {
+    const userDoc = await db.collection("users").doc(req.user.uid).get();
+    const userData = userDoc.data();
+
+    if (userData?.status === "blocked") {
+      return res.status(403).json({
+        error: "Account blocked",
+        code: "account-blocked",
+      });
+    }
+
+    res.json({ status: userData?.status || "active" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/admin/check", authMiddleware, async (req, res) => {
+  try {
+    const adminStatus = await isAdmin(req.user.uid);
+    res.json({ isAdmin: adminStatus });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/admin/users/:userId/toggle-block", authMiddleware, async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.uid))) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const { userId } = req.params;
+    const { blocked } = req.body;
+
+    await db.collection("users").doc(userId).update({
+      status: blocked ? "blocked" : "active",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await admin.auth().updateUser(userId, {
+      disabled: blocked
+    });
+
+    if (blocked) {
+      await admin.auth().revokeRefreshTokens(userId);
+    }
+
+    res.json({ 
+      success: true,
+      blocked,
+      message: blocked ? "Utilisateur bloqué et déconnecté" : "Utilisateur débloqué"
+    });
+  } catch (error) {
+    console.error("Error toggling user block status:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post(
+  "/api/admin/users/:userId/verify",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      if (!(await isAdmin(req.user.uid))) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      const { userId } = req.params;
+
+      await db.collection("users").doc(userId).update({
+        status: "active",
+        isVerified: true,
+        verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 module.exports = app;
