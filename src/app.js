@@ -5,6 +5,7 @@ const cors = require("cors");
 const authMiddleware = require("./middleware/auth");
 const admin = require("./config/firebase");
 const { getFirestore } = require("firebase-admin/firestore");
+const { doc, getDoc, setDoc, deleteDoc } = require('firebase-admin/firestore');
 const app = express();
 
 const db = getFirestore();
