@@ -187,6 +187,50 @@ app.post("/api/listings", authMiddleware, async (req, res) => {
   }
 });
 
+// API Favorites
+app.post("/api/favorites/toggle", authMiddleware, async (req, res) => {
+  const { listingId } = req.body;
+  const userId = req.user.uid;
+
+  try {
+    const favoriteRef = db.collection('favorites').doc(`${userId}_${listingId}`);
+    const favoriteDoc = await favoriteRef.get();
+
+    if (favoriteDoc.exists) {
+      await favoriteRef.delete();
+      res.json({ success: true, isFavorite: false });
+    } else {
+      await favoriteRef.set({
+        userId,
+        listingId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      res.json({ success: true, isFavorite: true });
+    }
+  } catch (error) {
+    console.error("Error toggling favorite:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/favorites/check/:listingId", authMiddleware, async (req, res) => {
+  const { listingId } = req.params;
+  const userId = req.user.uid;
+
+  try {
+    const favoriteRef = db.collection('favorites').doc(`${userId}_${listingId}`);
+    const favoriteDoc = await favoriteRef.get();
+
+    res.json({
+      success: true,
+      isFavorite: favoriteDoc.exists
+    });
+  } catch (error) {
+    console.error("Error checking favorite:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get("/api/listings", async (req, res) => {
   try {
     const listingsSnapshot = await db.collection("listings").get();
