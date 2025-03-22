@@ -14,15 +14,6 @@ const db = getFirestore();
 app.use(express.json());
 app.use(cors()); // Enable CORS for all routes
 
-// Middleware global pour gérer les erreurs
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({
-    success: false,
-    error: err.message || "Internal Server Error",
-  });
-});
-
 // Routes setup
 app.get("/", (req, res) => {
   res.send("Hello World!");
@@ -192,31 +183,6 @@ app.post("/api/listings", authMiddleware, async (req, res) => {
       .json({ success: true, message: "Listing created successfully" });
   } catch (error) {
     console.error("Error creating listing:", error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Ajout d'une route pour supprimer un listing
-app.delete("/api/listings/:id", authMiddleware, async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user.uid;
-
-  try {
-    const listingRef = db.collection("listings").doc(id);
-    const listingDoc = await listingRef.get();
-
-    if (!listingDoc.exists) {
-      return res.status(404).json({ success: false, error: "Listing not found" });
-    }
-
-    if (listingDoc.data().metadata.userId !== userId) {
-      return res.status(403).json({ success: false, error: "Unauthorized" });
-    }
-
-    await listingRef.delete();
-    res.json({ success: true, message: "Listing deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting listing:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
