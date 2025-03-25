@@ -33,16 +33,30 @@ app.get("/", (req, res) => {
   res.send("Colocation API is running");
 });
 
-app.get("/LoggedIn", authMiddleware, (req, res) => {
-  res.send(`Hello ${req.user.uid}`);
-});
-
+// Montage des routes
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/listings", listingRoutes);
+app.use("/api/listings", listingRoutes); // Assurez-vous que cette ligne est présente
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/upload", uploadRoutes);
+
+// Gestion des erreurs 404
+app.use((req, res, next) => {
+  res.status(404).json({
+    success: false,
+    error: `Cannot ${req.method} ${req.url}`
+  });
+});
+
+// Gestion des erreurs globales
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    success: false,
+    error: err.message
+  });
+});
 
 module.exports = app;
