@@ -1,5 +1,14 @@
 # Colocation Backend
 
+The **Colocation Backend** is the server-side application for a colocation platform, providing essential features such as user authentication, property listing management, and administrative controls. Built with **Node.js**, **Express.js**, and **Firebase Admin SDK**, it ensures a secure and efficient backend for managing user profiles, file uploads, and favorite listings. This project is designed to support both users and administrators with a robust API for seamless interaction.
+
+## Plan
+
+1. **Technologies Used** - Overview of the technologies powering the backend.
+2. **Installation** - Steps to set up and run the backend server.
+3. **API Endpoints** - List of available API routes and their functionalities.
+4. **Features** - Key functionalities provided by the backend.
+
 ## Technologies Used
 
 - **Node.js**: Environnement d'exécution JavaScript
@@ -14,7 +23,7 @@
 
 ```sh
 # Clone the repository
-git clone git@github.com:Colompykos/colocation-frontend.git
+git clone https://github.com/Colompykos/colocation-backend.git
 
 # Navigate to the project directory
 cd colocation-backend
